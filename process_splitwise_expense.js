@@ -55,9 +55,10 @@ export default defineComponent({
       optional: true,
     },
     selected_people: {
-      type: "string[]",
+      type: "string",
       label: "Selected People",
-      description: "For split selected equally, provide first names of people to include in the split. Example: ['John', 'Jane', 'Bob']. Leave empty to automatically get from request body.",
+      description: "For split selected equally, provide first names separated by commas (e.g., 'John,Jane,Bob') or leave empty to automatically get from iOS Shortcut request.",
+      default: "{{steps.trigger.event.body['5'].selected_people}}",
       optional: true,
     },
     debug: {
@@ -180,7 +181,19 @@ export default defineComponent({
         console.log('Description:', this.description);
         console.log('Split Method:', this.split_method);
         console.log('Selected People (from config):', this.selected_people);
+        console.log('Selected People type:', typeof this.selected_people);
+        console.log('Selected People length:', this.selected_people?.length);
         console.log('Full trigger event body:', JSON.stringify($.event?.body || 'No body available', null, 2));
+        
+        // Enhanced debugging for selected_people issue
+        if ($.event?.body) {
+          console.log('Event body exists');
+          console.log('Event body[5]:', JSON.stringify($.event.body['5'], null, 2));
+          console.log('Event body[5].selected_people:', $.event.body['5']?.selected_people);
+          console.log('Event body.selected_people:', $.event.body.selected_people);
+        } else {
+          console.log('No event body found');
+        }
       }
 
       // Get current user ID automatically
@@ -221,52 +234,71 @@ export default defineComponent({
       }
       else if (this.split_method === "split_selected_equally") {
         // Split equally among selected people
-        let selectedPeopleArray = this.selected_people;
-        
-        // Check if we have empty or invalid selected_people from the hardcoded config
-        const isEmptyConfig = !selectedPeopleArray || 
-                             selectedPeopleArray.length === 0 || 
-                             (selectedPeopleArray.length === 1 && selectedPeopleArray[0] === "");
+        let selectedPeopleArray = null;
         
         if (this.debug) {
-          console.log('Original selected_people from prop:', selectedPeopleArray);
-          console.log('Is empty config?', isEmptyConfig);
+          console.log('=== SELECTED PEOPLE DEBUG START ===');
+          console.log('Configured selected_people prop:', this.selected_people);
+          console.log('Type of selected_people prop:', typeof this.selected_people);
+          console.log('Is selected_people null?', this.selected_people === null);
+          console.log('Is selected_people undefined?', this.selected_people === undefined);
+          console.log('Request body exists:', !!$.event?.body);
         }
         
-        // If the configured value is empty, try to get from request body
-        if (isEmptyConfig && $.event?.body) {
+        // ALWAYS try to get from request body FIRST
+        if ($.event?.body) {
           const requestBody = $.event.body;
-          selectedPeopleArray = requestBody['5']?.selected_people || 
-                               requestBody.selected_people;
-                               
+          const bodySelectedPeople = requestBody['5']?.selected_people || requestBody.selected_people;
+          
           if (this.debug) {
             console.log('Trying to get selected_people from request body...');
-            console.log('Found selected_people in request:', selectedPeopleArray);
+            console.log('requestBody["5"]:', requestBody['5']);
+            console.log('Found selected_people in request:', bodySelectedPeople);
+            console.log('Type of selected_people from request:', typeof bodySelectedPeople);
+          }
+          
+          if (bodySelectedPeople) {
+            selectedPeopleArray = bodySelectedPeople;
           }
         }
         
-        // Handle different formats that iOS Shortcuts might send
-        if (typeof selectedPeopleArray === 'string') {
-          if (this.debug) {
-            console.log('selectedPeopleArray is a string:', selectedPeopleArray);
-          }
+        // If nothing from request body, fall back to configured value
+        if (!selectedPeopleArray && this.selected_people && typeof this.selected_people === 'string' && this.selected_people.trim()) {
+          selectedPeopleArray = this.selected_people;
           
-          // Parse string formats
+          if (this.debug) {
+            console.log('Using configured selected_people:', selectedPeopleArray);
+          }
+        }
+        
+        if (this.debug) {
+          console.log('Raw selectedPeopleArray before processing:', selectedPeopleArray);
+          console.log('Type:', typeof selectedPeopleArray);
+        }
+        
+        // Convert to array format regardless of source
+        if (typeof selectedPeopleArray === 'string' && selectedPeopleArray.trim()) {
+          // Handle string formats
           if (selectedPeopleArray.startsWith('[') && selectedPeopleArray.endsWith(']')) {
-            // JSON array format
-            selectedPeopleArray = JSON.parse(selectedPeopleArray);
+            // JSON array format: "[\"John\",\"Jane\"]"
+            try {
+              selectedPeopleArray = JSON.parse(selectedPeopleArray);
+            } catch (e) {
+              // If JSON parse fails, treat as comma-separated
+              selectedPeopleArray = selectedPeopleArray.slice(1, -1).split(',').map(s => s.replace(/['"]/g, '').trim());
+            }
           } else if (selectedPeopleArray.includes('\n')) {
-            // Newline-separated (from iOS Shortcuts Choose from List)
+            // Newline-separated: "John\nJane"
             selectedPeopleArray = selectedPeopleArray.split('\n').map(s => s.trim()).filter(s => s.length > 0);
           } else if (selectedPeopleArray.includes(',')) {
-            // Comma-separated string
+            // Comma-separated: "John,Jane,Bob"
             selectedPeopleArray = selectedPeopleArray.split(',').map(s => s.trim()).filter(s => s.length > 0);
-          } else if (selectedPeopleArray.trim().length > 0) {
-            // Single name
-            selectedPeopleArray = [selectedPeopleArray.trim()];
           } else {
-            selectedPeopleArray = [];
+            // Single name: "John"
+            selectedPeopleArray = [selectedPeopleArray.trim()];
           }
+        } else if (!Array.isArray(selectedPeopleArray)) {
+          selectedPeopleArray = [];
         }
         
         // Filter out any empty strings from the array
@@ -276,6 +308,10 @@ export default defineComponent({
         
         if (this.debug) {
           console.log('Final processed selectedPeopleArray:', selectedPeopleArray);
+          console.log('Final type:', typeof selectedPeopleArray);
+          console.log('Final is array:', Array.isArray(selectedPeopleArray));
+          console.log('Final length:', selectedPeopleArray?.length);
+          console.log('=== SELECTED PEOPLE DEBUG END ===');
         }
         
         if (!selectedPeopleArray || selectedPeopleArray.length === 0) {
