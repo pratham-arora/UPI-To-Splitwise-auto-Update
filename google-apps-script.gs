@@ -203,3 +203,62 @@ function processSelectedPeople(input) {
   if (typeof input === 'string') return input.split(',').map(s => s.trim());
   return [];
 }
+
+/**
+ * Manual function for testing - call this directly from script editor
+ */
+function testCreateExpense() {
+  const testParams = {
+    group_name: "Test Group",
+    amount: "100.00",
+    description: "Test Expense",
+    split_method: "equal",
+    currency_code: "INR",
+    debug: true
+  };
+  
+  const result = createSplitwiseExpense(testParams);
+  console.log('Test Result:', JSON.stringify(result, null, 2));
+  return result;
+}
+
+**
+ * Helper function for manual testing with different split methods
+ */
+function testSplitSelectedEqually() {
+  const testParams = {
+    group_name: "Test Group",
+    amount: "120.00",
+    description: "Test Split Selected Equally",
+    split_method: "split_selected_equally",
+    selected_people: "Alice,Bob,Charlie", // Replace with actual names from your group
+    currency_code: "INR",
+    debug: true
+  };
+  
+  const result = createSplitwiseExpense(testParams);
+  console.log('Split Selected Test Result:', JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
+ * Helper function for testing custom splits
+ */
+function testCustomSplit() {
+  const testParams = {
+    group_name: "Test Group",
+    amount: "150.00",
+    description: "Test Custom Split",
+    split_method: "custom",
+    user_splits: [
+      '{"user_id": "123456", "paid_share": "150.00", "owed_share": "75.00"}',
+      '{"user_id": "789012", "paid_share": "0.00", "owed_share": "75.00"}'
+    ], // Replace with actual user IDs from your group
+    currency_code: "INR",
+    debug: true
+  };
+  
+  const result = createSplitwiseExpense(testParams);
+  console.log('Custom Split Test Result:', JSON.stringify(result, null, 2));
+  return result;
+}
