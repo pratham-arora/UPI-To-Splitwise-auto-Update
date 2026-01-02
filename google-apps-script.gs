@@ -4,20 +4,29 @@
  */
 
 const CONFIG = {
-  API_KEY: "mvWPNZ4VK1F4bV5H8SHkFZadZlsDYIwjIWZpLjvv", // Keep your API Key here
   CURRENCY_CODE: "INR",
   DEBUG: false
 };
+
+// Note: API_KEY is now passed by each user in their request
 
 // ==========================================
 // 1. NEW: doGet Function (For fetching data)
 // ==========================================
 function doGet(e) {
   try {
-    // SCENARIO A: Fetch members for a specific group (e.g., ?group_name=Goa)
+    // Validate API key is provided
+    const apiKey = e.parameter.api_key;
+    if (!apiKey) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ error: "API key is required. Pass it as ?api_key=YOUR_KEY" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // SCENARIO A: Fetch members for a specific group (e.g., ?group_name=Goa&api_key=YOUR_KEY)
     if (e.parameter.group_name) {
       const groupName = e.parameter.group_name;
-      const group = findGroupByName(groupName); 
+      const group = findGroupByName(groupName, false, apiKey); 
       
       // Format members for the Shortcut list
       const members = group.members.map(u => {
@@ -32,7 +41,7 @@ function doGet(e) {
     // SCENARIO B: Fetch all available groups (Default when no params)
     else {
       const groupsUrl = "https://secure.splitwise.com/api/v3.0/get_groups";
-      const response = makeAuthenticatedRequest('GET', groupsUrl);
+      const response = makeAuthenticatedRequest('GET', groupsUrl, null, false, apiKey);
       
       // Filter out empty groups and just get names
       const activeGroups = response.groups
@@ -58,6 +67,14 @@ function doPost(e) {
   try {
     const requestData = JSON.parse(e.postData.contents);
     
+    // Validate API key is provided
+    const apiKey = requestData.api_key || requestData.API_KEY;
+    if (!apiKey) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: false, error: "API key is required in request body" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
     if (CONFIG.DEBUG) console.log('Received request:', JSON.stringify(requestData));
     
     // Clean extraction for generic Shortcut
@@ -68,7 +85,8 @@ function doPost(e) {
       split_method: requestData['Split Method'] || requestData.split_method || 'equal',
       selected_people: requestData.selected_people,
       currency_code: CONFIG.CURRENCY_CODE,
-      debug: CONFIG.DEBUG
+      debug: CONFIG.DEBUG,
+      api_key: apiKey
     };
     
     const result = createSplitwiseExpense(expenseParams);
@@ -93,13 +111,17 @@ function createSplitwiseExpense(params) {
   if (!params.amount || !params.description || !params.group_name) {
     throw new Error("Missing required fields: amount, description, or group_name");
   }
+  
+  if (!params.api_key) {
+    throw new Error("API key is required");
+  }
 
   // 1. Get Current User ID
-  const currentUser = getCurrentUser(params.debug);
+  const currentUser = getCurrentUser(params.debug, params.api_key);
   const currentUserId = currentUser.id;
 
   // 2. Find Group
-  const group = findGroupByName(params.group_name, params.debug);
+  const group = findGroupByName(params.group_name, params.debug, params.api_key);
   const groupId = group.id;
 
   // 3. Prepare Base Expense
@@ -155,7 +177,7 @@ function createSplitwiseExpense(params) {
 
   // 5. Send to Splitwise
   const expenseUrl = "https://secure.splitwise.com/api/v3.0/create_expense";
-  const response = makeAuthenticatedRequest('POST', expenseUrl, expenseData, params.debug);
+  const response = makeAuthenticatedRequest('POST', expenseUrl, expenseData, params.debug, params.api_key);
 
   if (response.errors && response.errors.length > 0) {
     throw new Error(response.errors.join(", "));
@@ -167,10 +189,14 @@ function createSplitwiseExpense(params) {
   };
 }
 
-function makeAuthenticatedRequest(method, url, data = null, debug = false) {
+function makeAuthenticatedRequest(method, url, data = null, debug = false, apiKey = null) {
+  if (!apiKey) {
+    throw new Error("API key is required for authenticated requests");
+  }
+  
   const options = {
     method: method,
-    headers: { 'Authorization': `Bearer ${CONFIG.API_KEY}`, 'Accept': 'application/json' }
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' }
   };
   if (data) {
     options.headers['Content-Type'] = 'application/json';
@@ -180,12 +206,12 @@ function makeAuthenticatedRequest(method, url, data = null, debug = false) {
   return JSON.parse(response.getContentText());
 }
 
-function getCurrentUser(debug) {
-  return makeAuthenticatedRequest('GET', "https://secure.splitwise.com/api/v3.0/get_current_user", null, debug).user;
+function getCurrentUser(debug, apiKey) {
+  return makeAuthenticatedRequest('GET', "https://secure.splitwise.com/api/v3.0/get_current_user", null, debug, apiKey).user;
 }
 
-function findGroupByName(groupName, debug) {
-  const response = makeAuthenticatedRequest('GET', "https://secure.splitwise.com/api/v3.0/get_groups", null, debug);
+function findGroupByName(groupName, debug, apiKey) {
+  const response = makeAuthenticatedRequest('GET', "https://secure.splitwise.com/api/v3.0/get_groups", null, debug, apiKey);
   const cleanedInput = groupName.replace(/\s+/g, '').toLowerCase();
   
   let target = response.groups.find(g => g.name.replace(/\s+/g, '').toLowerCase() === cleanedInput);
