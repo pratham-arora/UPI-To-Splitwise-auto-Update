@@ -248,7 +248,7 @@ function testCreateExpense() {
   return result;
 }
 
-**
+/**
  * Helper function for manual testing with different split methods
  */
 function testSplitSelectedEqually() {
@@ -288,3 +288,4 @@ function testCustomSplit() {
   console.log('Custom Split Test Result:', JSON.stringify(result, null, 2));
   return result;
 }
+
