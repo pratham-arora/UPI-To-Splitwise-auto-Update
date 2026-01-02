@@ -160,12 +160,7 @@ function createSplitwiseExpense(params) {
       });
       if (user) selectedUsers.push(user);
     }
-
-    // Add current user if not in list (Optional logic - usually safer to add self)
-    if (!selectedUsers.find(u => u.id === currentUserId)) {
-      selectedUsers.push({ id: currentUserId }); 
-    }
-
+    
     const share = (parseFloat(params.amount) / selectedUsers.length).toFixed(2);
 
     selectedUsers.forEach((user, index) => {
@@ -226,10 +221,14 @@ function findGroupByName(groupName, debug, apiKey) {
 function processSelectedPeople(input) {
   if (!input) return [];
   if (Array.isArray(input)) return input;
-  if (typeof input === 'string') return input.split(',').map(s => s.trim());
+  
+  // NEW: Split by comma OR newline (\n)
+  if (typeof input === 'string') {
+    return input.split(/[\n,]+/).map(s => s.trim()).filter(s => s !== "");
+  }
+
   return [];
 }
-
 /**
  * Manual function for testing - call this directly from script editor
  */
@@ -253,12 +252,13 @@ function testCreateExpense() {
  */
 function testSplitSelectedEqually() {
   const testParams = {
-    group_name: "Test Group",
-    amount: "120.00",
+    group_name: "Flatmates",
+    amount: "1",
     description: "Test Split Selected Equally",
     split_method: "split_selected_equally",
-    selected_people: "Alice,Bob,Charlie", // Replace with actual names from your group
+    selected_people: "Kamal Sharma Pratham Arora", // Replace with actual names from your group
     currency_code: "INR",
+    api_key:"vFIsDuVXuEN7vccqR2tlPz5VqYBV83W2F742eDOO",
     debug: true
   };
   
@@ -288,4 +288,3 @@ function testCustomSplit() {
   console.log('Custom Split Test Result:', JSON.stringify(result, null, 2));
   return result;
 }
-
