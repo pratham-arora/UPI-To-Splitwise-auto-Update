@@ -137,7 +137,7 @@ function createSplitwiseExpense(params) {
     expenseData.split_equally = true;
   }
   else if (params.split_method === "split_selected_equally") {
-    // Handle specific people
+    
     let selectedNames = processSelectedPeople(params.selected_people);
     
     if (!selectedNames || selectedNames.length === 0) {
@@ -156,35 +156,53 @@ function createSplitwiseExpense(params) {
       });
       if (user) selectedUsers.push(user);
     }
+    
+    // --- PENNY FIX LOGIC START ---
+    
+    const totalAmount = parseFloat(params.amount);
+    const numUsers = selectedUsers.length;
+    
+    // Calculate the base share (rounded down to 2 decimals)
+    // e.g. 1.00 / 3 = 0.3333... -> 0.33
+    const baseShare = Math.floor((totalAmount / numUsers) * 100) / 100;
+    
+    // Calculate the total that is accounted for so far
+    // e.g. 0.33 * 3 = 0.99
+    const totalAccounted = baseShare * numUsers;
+    
+    // Calculate remainder pennies to distribute
+    // e.g. 1.00 - 0.99 = 0.01 (1 penny needs to be added to someone)
+    let remainder = Math.round((totalAmount - totalAccounted) * 100);
 
-// Check if the Payer (You) is in the selected list
     const payerInList = selectedUsers.find(u => u.id === currentUserId);
-    
-    // Calculate share based ONLY on selected people
-    // (If you selected 2 people and you are NOT one of them, we divide by 2, not 3)
-    const share = (parseFloat(params.amount) / selectedUsers.length).toFixed(2);
-    
     let userIndex = 0;
     
-    // Loop through everyone who needs to split the bill
     selectedUsers.forEach(user => {
+      // Determine this user's specific share
+      let userOwed = baseShare;
+      
+      // If we still have remainder pennies, give one to this user
+      if (remainder > 0) {
+        userOwed = (baseShare + 0.01);
+        remainder--;
+      }
+      
       expenseData[`users__${userIndex}__user_id`] = user.id;
-      expenseData[`users__${userIndex}__paid_share`] = "0.00"; // Assume they paid nothing initially
-      expenseData[`users__${userIndex}__owed_share`] = share;  // They owe their calculated share
+      expenseData[`users__${userIndex}__paid_share`] = "0.00"; 
+      expenseData[`users__${userIndex}__owed_share`] = userOwed.toFixed(2); // Ensure 2 decimal string
       userIndex++;
     });
     
+    // --- PENNY FIX LOGIC END ---
+    
     // Now handle the Payer (You)
     if (!payerInList) {
-      // If you are NOT in the split list
-      // We must add you as a separate entry who Paid 100 but Owes 0.
+      // You Paid full amount, Owe 0.00
       expenseData[`users__${userIndex}__user_id`] = currentUserId;
       expenseData[`users__${userIndex}__paid_share`] = params.amount;
       expenseData[`users__${userIndex}__owed_share`] = "0.00";
     } else {
-      // If you ARE in the split list
-      // You were already added in the loop above
-      // We find your entry and update your 'paid_share' to the full amount.
+      // You are in list: Find your entry and update 'paid_share'
       for (let i = 0; i < userIndex; i++) {
         if (expenseData[`users__${i}__user_id`] === currentUserId) {
           expenseData[`users__${i}__paid_share`] = params.amount;
@@ -312,4 +330,5 @@ function testCustomSplit() {
   console.log('Custom Split Test Result:', JSON.stringify(result, null, 2));
   return result;
 }
+
 
