@@ -146,10 +146,6 @@ function createSplitwiseExpense(params) {
 
     // Match names to IDs
     const selectedUsers = [];
-    // Always include yourself if not explicitly selected? 
-    // Usually "Split Selected" implies you + them. 
-    // IMPORTANT: Make sure YOU are in the selected list from shortcut or added here.
-    // For now, we assume the list passed from Shortcut includes everyone involved.
     
     for (const name of selectedNames) {
       const user = group.members.find(u => {
@@ -160,14 +156,42 @@ function createSplitwiseExpense(params) {
       });
       if (user) selectedUsers.push(user);
     }
-    
-    const share = (parseFloat(params.amount) / selectedUsers.length).toFixed(2);
 
-    selectedUsers.forEach((user, index) => {
-      expenseData[`users__${index}__user_id`] = user.id;
-      expenseData[`users__${index}__paid_share`] = user.id === currentUserId ? params.amount : "0.00";
-      expenseData[`users__${index}__owed_share`] = share;
+// Check if the Payer (You) is in the selected list
+    const payerInList = selectedUsers.find(u => u.id === currentUserId);
+    
+    // Calculate share based ONLY on selected people
+    // (If you selected 2 people and you are NOT one of them, we divide by 2, not 3)
+    const share = (parseFloat(params.amount) / selectedUsers.length).toFixed(2);
+    
+    let userIndex = 0;
+    
+    // Loop through everyone who needs to split the bill
+    selectedUsers.forEach(user => {
+      expenseData[`users__${userIndex}__user_id`] = user.id;
+      expenseData[`users__${userIndex}__paid_share`] = "0.00"; // Assume they paid nothing initially
+      expenseData[`users__${userIndex}__owed_share`] = share;  // They owe their calculated share
+      userIndex++;
     });
+    
+    // Now handle the Payer (You)
+    if (!payerInList) {
+      // If you are NOT in the split list
+      // We must add you as a separate entry who Paid 100 but Owes 0.
+      expenseData[`users__${userIndex}__user_id`] = currentUserId;
+      expenseData[`users__${userIndex}__paid_share`] = params.amount;
+      expenseData[`users__${userIndex}__owed_share`] = "0.00";
+    } else {
+      // If you ARE in the split list
+      // You were already added in the loop above
+      // We find your entry and update your 'paid_share' to the full amount.
+      for (let i = 0; i < userIndex; i++) {
+        if (expenseData[`users__${i}__user_id`] === currentUserId) {
+          expenseData[`users__${i}__paid_share`] = params.amount;
+          break;
+        }
+      }
+    }
   }
 
   // 5. Send to Splitwise
@@ -288,3 +312,4 @@ function testCustomSplit() {
   console.log('Custom Split Test Result:', JSON.stringify(result, null, 2));
   return result;
 }
+
