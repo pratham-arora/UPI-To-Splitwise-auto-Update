@@ -1,3 +1,5 @@
+// This is an older file, and deprecated. I shifted from Pipedream to Google Script for a more free calls per day limit.
+
 import { axios } from "@pipedream/platform"
 
 export default defineComponent({
@@ -413,4 +415,5 @@ export default defineComponent({
       throw new Error(`Splitwise expense creation failed: ${error.message}`);
     }
   }
+
 })
