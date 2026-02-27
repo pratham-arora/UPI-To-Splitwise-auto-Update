@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tasker Profile: UPI Payment Detected
+  =====================================
+  IMPORT INSTRUCTIONS:
+    1. Long-press the Profiles tab in Tasker
+    2. Tap "Import Profile"
+    3. Select this file
+
+  HOW IT WORKS:
+    Triggers when any SMS is received whose body matches UPI debit patterns
+    from any major Indian bank (HDFC, SBI, ICICI, Axis, Kotak, PNB, GPay, PhonePe).
+
+  SUPPORTED SMS PATTERNS:
+    - HDFC:     "Rs.500.00 debited from A/c XX1234 ... UPI ..."
+    - SBI:      "Your A/c XXXX debited Rs 1200 via UPI Ref ..."
+    - ICICI:    "INR 300.00 debited from your ICICI Bank Account ... UPI:..."
+    - Axis:     "INR 750 is debited ... VPA merchant@upi ..."
+    - Kotak:    "Rs. 200 has been debited via UPI ..."
+    - PNB:      "Rs.400 deducted via UPI Ref ..."
+    - GPay/PhonePe: "You have paid Rs. 500 to John via UPI"
+
+  REGEX EXPLAINED:
+    (?i)                      - case insensitive
+    (?:rs\.?\s*|inr\s*)       - matches "Rs.", "Rs", "INR", "rs." etc.
+    (\d+(?:\.\d+)?)           - captures amount (e.g. 500, 1500.50)
+    \s*
+    (?:debited|sent|deducted|is debited|has been debited)
+    .*                        - any text in between
+    (?:upi|imps)              - must mention UPI or IMPS to avoid false positives
+-->
+<TaskerData sr="" dvi="1" tv="6.2.3-beta">
+  <Profile sr="prof1" ve="2">
+    <cdate>1700000000000</cdate>
+    <edate>1700000000000</edate>
+    <flags>0</flags>
+    <id>1</id>
+    <nme>UPI Payment Detected</nme>
+
+    <!-- SMS Received Event -->
+    <Event sr="con0" ve="2">
+      <code>403</code>
+      <!-- arg0: Sender number — leave empty to match any sender -->
+      <Str sr="arg0" ve="3" val="" />
+      <!-- arg1: SMS Body regex — the core trigger pattern -->
+      <Str sr="arg1" ve="3"
+           val="(?i)(?:rs\.?\s*|inr\s*)(\d+(?:\.\d+)?)\s*(?:debited|sent|deducted|is debited|has been debited).*(?:upi|imps)" />
+    </Event>
+
+    <!-- Linked Task -->
+    <Task sr="Task">
+      <id>1</id>
+    </Task>
+
+  </Profile>
+</TaskerData>

@@ -1,5 +1,12 @@
 /**
- * Google Apps Script for Splitwise iOS Shortcut
+ * DEPRECATED: This script has been replaced by the Tasker + make.com integration.
+ * Kept here for reference only. For the active setup, see:
+ *   - tasker/upi-splitwise-profile.xml  (Android SMS trigger)
+ *   - tasker/upi-splitwise-task.xml     (main task logic)
+ *   - make-com/scenario-blueprint.json  (make.com scenario)
+ *   - README.md                         (setup guide)
+ *
+ * Original: Google Apps Script for Splitwise — UPI Auto-Expense (iOS Shortcut)
  * HANDLES BOTH: Creating expenses (POST) and Fetching groups/members (GET)
  */
 
