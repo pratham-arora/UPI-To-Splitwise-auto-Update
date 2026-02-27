@@ -1,0 +1,365 @@
+{
+  "name": "UPI to Splitwise",
+  "description": "Receives UPI expense data from Tasker (Android) and creates a Splitwise expense by calling the Splitwise API directly.",
+  "version": 1,
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": "REPLACE_WITH_YOUR_WEBHOOK_ID",
+        "maxResults": 1
+      },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "label": "Tasker UPI Webhook"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway:CustomWebHook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ],
+        "expectedOutputStructure": {
+          "api_key": { "type": "text", "label": "Splitwise API Key" },
+          "group_name": { "type": "text", "label": "Group Name" },
+          "amount": { "type": "text", "label": "Amount" },
+          "description": { "type": "text", "label": "Description" },
+          "split_method": { "type": "text", "label": "Split Method (equal | split_selected_equally)" },
+          "selected_people": { "type": "text", "label": "Selected People (comma-separated, optional)" }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false, "useNewZLibDeCompress": true },
+      "mapper": {
+        "url": "https://secure.splitwise.com/api/v3.0/get_groups",
+        "serializeUrl": false,
+        "method": "get",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{1.api_key}}"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "authUser": "",
+        "authPass": "",
+        "timeout": 30,
+        "followRedirects": true,
+        "compress": true,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": { "x": 300, "y": 0 },
+        "restore": {
+          "expect": {
+            "method": { "label": "GET" },
+            "bodyType": { "label": "Raw" }
+          }
+        },
+        "parameters": [
+          { "name": "handleErrors", "type": "boolean", "label": "Evaluate all states as errors" },
+          { "name": "useNewZLibDeCompress", "type": "boolean" }
+        ],
+        "expect": [
+          { "name": "url", "type": "url", "label": "URL", "required": true },
+          { "name": "serializeUrl", "type": "boolean", "label": "Serialize URL" },
+          { "name": "method", "type": "select", "label": "Method", "required": true },
+          { "name": "headers", "type": "array", "label": "Headers" },
+          { "name": "qs", "type": "array", "label": "Query String" },
+          { "name": "bodyType", "type": "select", "label": "Body type" },
+          { "name": "parseResponse", "type": "boolean", "label": "Parse response" },
+          { "name": "timeout", "type": "uinteger", "label": "Timeout" },
+          { "name": "followRedirects", "type": "boolean", "label": "Follow redirect" }
+        ],
+        "label": "Get Splitwise Groups"
+      }
+    },
+    {
+      "id": 3,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": { "handleErrors": false, "useNewZLibDeCompress": true },
+      "mapper": {
+        "url": "https://secure.splitwise.com/api/v3.0/get_current_user",
+        "serializeUrl": false,
+        "method": "get",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{1.api_key}}"
+          }
+        ],
+        "qs": [],
+        "bodyType": "raw",
+        "parseResponse": true,
+        "timeout": 30,
+        "followRedirects": true,
+        "compress": true,
+        "rejectUnauthorized": true
+      },
+      "metadata": {
+        "designer": { "x": 600, "y": 0 },
+        "label": "Get Current User (for paid_share)"
+      }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicFeeder",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "array": "{{map(filter(2.data.groups; group; group.id != 0 and length(group.members) > 0); group; if(lower(replace(group.name; \" \"; \"\")) = lower(replace(1.group_name; \" \"; \"\")); group; if(contains(lower(replace(group.name; \" \"; \"\")); lower(replace(1.group_name; \" \"; \"\"))); group; false)))}}"
+      },
+      "metadata": {
+        "designer": { "x": 900, "y": 0 },
+        "label": "Find Matching Group",
+        "_note": "This uses make.com's map+filter to find the group by name (fuzzy match). It emits the matching group object. Use {{4.id}} for group_id in subsequent modules."
+      }
+    },
+    {
+      "id": 5,
+      "module": "router:RouterModule",
+      "version": 1,
+      "parameters": {},
+      "metadata": {
+        "designer": { "x": 1200, "y": 0 },
+        "label": "Router: Split Method"
+      },
+      "routes": [
+        {
+          "id": "route_equal",
+          "label": "Equal Split",
+          "filter": {
+            "name": "Equal Split",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.split_method}}",
+                  "b": "equal",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          },
+          "flow": [
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false, "useNewZLibDeCompress": true },
+              "mapper": {
+                "url": "https://secure.splitwise.com/api/v3.0/create_expense",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.api_key}}"
+                  },
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "body": "{\"cost\":\"{{1.amount}}\",\"description\":\"{{1.description}}\",\"group_id\":{{4.id}},\"currency_code\":\"INR\",\"split_equally\":true}",
+                "parseResponse": true,
+                "timeout": 30,
+                "followRedirects": true,
+                "compress": true,
+                "rejectUnauthorized": true
+              },
+              "metadata": {
+                "designer": { "x": 1500, "y": -150 },
+                "label": "Create Expense (Equal Split)",
+                "_note": "split_equally:true tells Splitwise to divide the cost equally among all group members. No penny-fix needed — Splitwise handles the math."
+              }
+            }
+          ]
+        },
+        {
+          "id": "route_selected",
+          "label": "Split Selected Equally",
+          "filter": {
+            "name": "Split Selected Equally",
+            "conditions": [
+              [
+                {
+                  "a": "{{1.split_method}}",
+                  "b": "split_selected_equally",
+                  "o": "text:equal"
+                }
+              ]
+            ]
+          },
+          "flow": [
+            {
+              "id": 7,
+              "module": "tools:SetVariables",
+              "version": 1,
+              "parameters": {},
+              "mapper": {
+                "variables": [
+                  {
+                    "name": "people_array",
+                    "value": "{{split(1.selected_people; \",\")}}"
+                  },
+                  {
+                    "name": "people_count",
+                    "value": "{{length(split(1.selected_people; \",\"))}}"
+                  },
+                  {
+                    "name": "total_amount",
+                    "value": "{{parseNumber(1.amount)}}"
+                  },
+                  {
+                    "name": "base_share",
+                    "value": "{{floor(parseNumber(1.amount) / length(split(1.selected_people; \",\")) * 100) / 100}}"
+                  },
+                  {
+                    "name": "remainder_pennies",
+                    "value": "{{round((parseNumber(1.amount) - floor(parseNumber(1.amount) / length(split(1.selected_people; \",\")) * 100) / 100 * length(split(1.selected_people; \",\"))) * 100)}}"
+                  }
+                ]
+              },
+              "metadata": {
+                "designer": { "x": 1500, "y": 150 },
+                "label": "Calculate Share Amounts (Penny-Fix)",
+                "_note": "Replicates the penny-fix logic from the original GAS script. base_share is floored to 2 decimals. remainder_pennies are distributed one per person from the front of the list."
+              }
+            },
+            {
+              "id": 8,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false, "useNewZLibDeCompress": true },
+              "mapper": {
+                "url": "https://secure.splitwise.com/api/v3.0/get_groups",
+                "serializeUrl": false,
+                "method": "get",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.api_key}}"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "parseResponse": true,
+                "timeout": 30,
+                "followRedirects": true
+              },
+              "metadata": {
+                "designer": { "x": 1800, "y": 150 },
+                "label": "Get Group Members for Selected Group",
+                "_note": "Fetch the group members to resolve names → user IDs for the users__N__ Splitwise parameters."
+              }
+            },
+            {
+              "id": 9,
+              "module": "http:ActionSendData",
+              "version": 3,
+              "parameters": { "handleErrors": false, "useNewZLibDeCompress": true },
+              "mapper": {
+                "url": "https://secure.splitwise.com/api/v3.0/create_expense",
+                "serializeUrl": false,
+                "method": "post",
+                "headers": [
+                  {
+                    "name": "Authorization",
+                    "value": "Bearer {{1.api_key}}"
+                  },
+                  {
+                    "name": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "qs": [],
+                "bodyType": "raw",
+                "body": "{{/*\n  NOTE: For split_selected_equally, the body must include users__0__user_id,\n  users__0__paid_share, users__0__owed_share for each selected person.\n\n  make.com cannot dynamically build these flattened keys using standard\n  mapping alone. Use the following approach:\n\n  RECOMMENDED APPROACH — Use make.com's 'Tools > Build a JSON' module\n  (id 9 below) to dynamically construct the body, OR manually build\n  the JSON string using a text template if the number of people is fixed.\n\n  For a fully dynamic build, use make.com's Iterator + Aggregator modules:\n  1. Iterator: iterate over split(1.selected_people, \",\")\n  2. For each person, HTTP GET get_current_user to resolve name→id\n     (match against group members from module 8)\n  3. Array Aggregator: collect user objects\n  4. Build the final request body in a 'Tools > Set Variable' using\n     the aggregated array\n\n  See README.md for the step-by-step make.com setup guide.\n*/}}",
+                "parseResponse": true,
+                "timeout": 30,
+                "followRedirects": true
+              },
+              "metadata": {
+                "designer": { "x": 2100, "y": 150 },
+                "label": "Create Expense (Split Selected - configure manually)",
+                "_note": "This module requires manual configuration in make.com UI to map the dynamic users__N__ fields. See README.md for detailed instructions."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "status": "200",
+        "body": "{\"success\":true,\"summary\":\"Created: {{1.description}} ({{1.amount}} INR) in {{4.name}}\"}",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": { "x": 1200, "y": 300 },
+        "label": "Respond to Tasker",
+        "_note": "Returns JSON to Tasker so it can show the result in the notification. Runs after the Router branches complete."
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu1.make.com",
+    "_setup_notes": {
+      "step1": "Import this blueprint in make.com: Scenarios → Create new scenario → ... (3 dots) → Import Blueprint",
+      "step2": "In Module 1 (Webhook), create a new webhook and copy its URL to Tasker global variable %MAKE_WEBHOOK_URL",
+      "step3": "Run the scenario once with a test Tasker call to auto-detect the data structure",
+      "step4": "The Router (Module 5) handles equal split automatically via split_equally:true",
+      "step5": "For split_selected_equally, configure Module 9 manually per README instructions",
+      "operations_per_expense": "3 (get_groups + get_current_user + create_expense) — well within 1000/month free tier",
+      "splitwise_api_key": "Passed from Tasker per request — never stored in make.com"
+    }
+  }
+}
